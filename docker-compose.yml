@@ -1,0 +1,53 @@
+services:
+  livekit-server:
+    build:
+      context: ./livekit-server
+      dockerfile: Dockerfile
+    container_name: livekit-server
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+    networks:
+      - livekit-network
+    restart: unless-stopped
+
+  livekit-web:
+    build:
+      context: ./livekit-web
+      dockerfile: Dockerfile
+    container_name: livekit-web
+    ports:
+      - "3000:3000"
+    environment:
+      - LIVEKIT_API_KEY=devkey
+      - LIVEKIT_API_SECRET=secret
+      - LIVEKIT_URL=ws://localhost:7880
+    depends_on:
+      - livekit-server
+    networks:
+      - livekit-network
+    restart: unless-stopped
+
+  ai-agent:
+    build:
+      context: ./ai-agent
+      dockerfile: Dockerfile
+    container_name: ai-agent
+    environment:
+      - LIVEKIT_URL=ws://livekit-server:7880
+      - LIVEKIT_API_KEY=devkey
+      - LIVEKIT_API_SECRET=secret
+      - GOOGLE_API_KEY=AIzaSyDaD1i09w3Ms61NoawbP1fE2esV6p2i-74
+      - TAVUS_API_KEY=e1514a10eaaf43e88b976eb38e3d01f1
+      - TAVUS_REPLICA_ID=rf4703150052
+      - TAVUS_PERSONA_ID=p405fa2e1e31
+    depends_on:
+      - livekit-server
+    networks:
+      - livekit-network
+    restart: unless-stopped
+
+networks:
+  livekit-network:
+    driver: bridge
