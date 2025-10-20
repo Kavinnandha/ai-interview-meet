@@ -22,7 +22,7 @@ services:
     environment:
       - LIVEKIT_API_KEY=devkey
       - LIVEKIT_API_SECRET=secret
-      - LIVEKIT_URL=ws://localhost:7880
+      - LIVEKIT_URL=wss://livekit.kavinweb.info
     depends_on:
       - livekit-server
     networks:
