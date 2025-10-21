@@ -5,9 +5,10 @@ services:
       dockerfile: Dockerfile
     container_name: livekit-server
     ports:
-      - "7880:7880"
-      - "7881:7881"
-      - "7882:7882/udp"
+      - "7880:7880"      # HTTP/WebSocket for signaling
+      - "7881:7881"      # TCP fallback
+      - "7882:7882/udp"  # UDP for WebRTC media
+      - "50000-50100:50000-50100/udp"  # Additional UDP port range for multiple connections
     networks:
       - livekit-network
     restart: unless-stopped
