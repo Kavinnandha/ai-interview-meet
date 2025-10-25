@@ -83,17 +83,16 @@ if not os.getenv('TAVUS_PERSONA_ID'):
     os.environ['TAVUS_PERSONA_ID'] = 'p405fa2e1e31'
     logger.info("Applied Tavus Persona ID (LiveKit-compatible)")
 
+# LiveKit credentials should be set via environment variables (docker-compose.yml)
+# No fallback values - fail fast if credentials are missing
 if not os.getenv('LIVEKIT_URL'):
-    os.environ['LIVEKIT_URL'] = 'wss://plasement-ai-8l2w6qjz.livekit.cloud'
-    logger.info("Applied fallback LIVEKIT_URL")
-
+    logger.error("LIVEKIT_URL not set in environment")
+    
 if not os.getenv('LIVEKIT_API_KEY'):
-    os.environ['LIVEKIT_API_KEY'] = 'API8jVWBxwNrEw3'
-    logger.info("Applied fallback LIVEKIT_API_KEY")
-
+    logger.error("LIVEKIT_API_KEY not set in environment")
+    
 if not os.getenv('LIVEKIT_API_SECRET'):
-    os.environ['LIVEKIT_API_SECRET'] = 'SD6EZeBBCOFDaF19qWbtieTShNIu3qAYBps9ec5mAFwB'
-    logger.info("Applied fallback LIVEKIT_API_SECRET")
+    logger.error("LIVEKIT_API_SECRET not set in environment")
 
 # Verify environment variables are loaded
 logger.info("Environment variables status:")

@@ -3,4 +3,4 @@ rtc:
   tcp_port: 7881
   udp_port: 7882
 keys:
-  devkey: secret
+  devkey: devkey_secret_32chars_minimum_required_for_security
