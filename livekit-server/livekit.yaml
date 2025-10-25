@@ -1,6 +1,16 @@
 port: 7880
+bind_addresses:
+  - 0.0.0.0
 rtc:
   tcp_port: 7881
   udp_port: 7882
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: true
+  node_ip: 110.172.151.107
+  stun_servers:
+    - stun.l.google.com:19302
 keys:
   devkey: devkey_secret_32chars_minimum_required_for_security
+logging:
+  level: debug
