@@ -81,7 +81,7 @@ def create_gemini_session():
         session = AgentSession(
             llm=google.beta.realtime.RealtimeModel(
                 model="gemini-2.0-flash-live-001",  # Live API model - UNLIMITED requests!
-                voice="Kore",  # Available voices: Puck, Charon, Kore, Fenrir, Aoede
+                voice="Aoede",  # Available voices: Puck, Charon, Kore, Fenrir, Aoede
                 temperature=0.8,
             ),
         )
