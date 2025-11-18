@@ -1,14 +1,13 @@
-"""English Teacher Agent with Tavus Avatar Integration
+"""English Teacher Agent with Gemini API
 
-An English teacher AI that helps Tamil speakers learn English with virtual avatar support.
+An English teacher AI that helps Tamil speakers learn English using Google's Gemini API.
 
 DEPENDENCIES INSTALLATION:
 Before running this agent, install the required dependencies:
     pip install -r requirements.txt
 
 FEATURES:
-- Voice conversation with Google Realtime API
-- Visual avatar support via Tavus
+- Voice conversation with Google Gemini 2.0 Flash Live-001 (Free Tier - UNLIMITED requests!)
 - English teaching with multilingual understanding
 - Grammar correction and pronunciation help
 - Friendly conversation practice
@@ -18,11 +17,8 @@ import asyncio
 import logging
 import os
 import signal
-import ssl
-import subprocess
 import sys
 import time
-import warnings
 from contextlib import suppress
 from typing import Optional
 
@@ -42,49 +38,24 @@ from dotenv import load_dotenv
 from english_teacher_prompt import get_english_teaching_instruction
 
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, WorkerType, cli
-from livekit.plugins import google, tavus
+from livekit.plugins import google
 from livekit import rtc
-from livekit.agents._exceptions import APIStatusError
-
-# Try to import Ollama plugin - might not be available
-OLLAMA_AVAILABLE = False
-ollama_plugin = None
-try:
-    import importlib
-    ollama_plugin = importlib.import_module('livekit.plugins.ollama')
-    OLLAMA_AVAILABLE = True
-    logger.info("Ollama plugin available")
-except ImportError:
-    logger.warning("Ollama plugin not available, will use Gemini as primary LLM")
 
 # Global state for keeping the agent running
 _shutdown_requested = False
 _restart_count = 0
 _max_restarts = 10
 
-# Load environment variables (prioritize .env.local over .env)
+# Load environment variables
 _ = load_dotenv(".env.local")
 _ = load_dotenv(".env")
-# Fallback values for credentials if not found in environment
+
+# Verify required environment variables
 if not os.getenv('GOOGLE_API_KEY'):
-    os.environ['GOOGLE_API_KEY'] = 'AIzaSyDaD1i09w3Ms61NoawbP1fE2esV6p2i-74'
-    logger.info("Applied fallback GOOGLE_API_KEY")
+    logger.error("GOOGLE_API_KEY not set in environment")
+    logger.error("Please set your Google API key to use Gemini API")
+    sys.exit(1)
 
-# Set Tavus credentials
-if not os.getenv('TAVUS_API_KEY'):
-    os.environ['TAVUS_API_KEY'] = 'e1514a10eaaf43e88b976eb38e3d01f1'
-    logger.info("Applied Tavus API key")
-
-if not os.getenv('TAVUS_REPLICA_ID'):
-    os.environ['TAVUS_REPLICA_ID'] = 'rf4703150052'
-    logger.info("Applied Tavus Replica ID")
-
-if not os.getenv('TAVUS_PERSONA_ID'):
-    os.environ['TAVUS_PERSONA_ID'] = 'p405fa2e1e31'
-    logger.info("Applied Tavus Persona ID (LiveKit-compatible)")
-
-# LiveKit credentials should be set via environment variables (docker-compose.yml)
-# No fallback values - fail fast if credentials are missing
 if not os.getenv('LIVEKIT_URL'):
     logger.error("LIVEKIT_URL not set in environment")
     
@@ -100,138 +71,46 @@ logger.info(f"  LIVEKIT_URL: {'OK' if os.getenv('LIVEKIT_URL') else 'MISSING'}")
 logger.info(f"  LIVEKIT_API_KEY: {'OK' if os.getenv('LIVEKIT_API_KEY') else 'MISSING'}")
 logger.info(f"  LIVEKIT_API_SECRET: {'OK' if os.getenv('LIVEKIT_API_SECRET') else 'MISSING'}")
 logger.info(f"  GOOGLE_API_KEY: {'OK' if os.getenv('GOOGLE_API_KEY') else 'MISSING'}")
-logger.info(f"  TAVUS_API_KEY: {'OK' if os.getenv('TAVUS_API_KEY') else 'MISSING'}")
-logger.info(f"  TAVUS_REPLICA_ID: {'OK' if os.getenv('TAVUS_REPLICA_ID') else 'MISSING'}")
-logger.info(f"  TAVUS_PERSONA_ID: {'OK' if os.getenv('TAVUS_PERSONA_ID') else 'MISSING'}")
-
-def create_ollama_session():
-    """Create a session with Ollama as the primary LLM."""
-    if not OLLAMA_AVAILABLE or ollama_plugin is None:
-        logger.info("Ollama not available, skipping Ollama session creation")
-        return None
-        
-    try:
-        # Try to connect to local Ollama server on port 11434
-        ollama_model = os.getenv('OLLAMA_MODEL', 'llama3')
-        ollama_base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')
-        logger.info(f"Attempting to connect to Ollama server at {ollama_base_url} with model: {ollama_model}")
-        
-        session = AgentSession(
-            llm=ollama_plugin.LLM(
-                model=ollama_model,
-                base_url=ollama_base_url
-            ),
-        )
-        logger.info("[SUCCESS] Ollama session created successfully")
-        return session
-    except Exception as e:
-        logger.warning(f"Failed to create Ollama session: {e}")
-        return None
 
 def create_gemini_session():
-    """Create a session with Google's Gemini as the fallback LLM."""
+    """Create a session with Google's Gemini API (Free Tier - gemini-2.0-flash-live-001)."""
     try:
-        # Create session with Google's Realtime model using the correct syntax
+        # Use Gemini 2.0 Flash Live (Free Tier with UNLIMITED requests!)
+        # Rate limits: Unlimited RPM, 1M TPM, Unlimited RPD
+        # This is the Live API model specifically designed for real-time conversations
         session = AgentSession(
             llm=google.beta.realtime.RealtimeModel(
-                model="gemini-2.0-flash-exp",
-                voice="Puck",
+                model="gemini-2.0-flash-live-001",  # Live API model - UNLIMITED requests!
+                voice="Kore",  # Available voices: Puck, Charon, Kore, Fenrir, Aoede
                 temperature=0.8,
             ),
         )
-        logger.info("[SUCCESS] Google Realtime model session created successfully")
+        logger.info("[SUCCESS] Gemini 2.0 Flash Live session created (Free Tier - UNLIMITED requests)")
         return session
     except Exception as e:
         logger.error(f"Failed to create Gemini session: {e}")
         return None
 
-async def create_session_with_fallback():
-    """Create a session with fallback mechanism: Ollama -> Gemini."""
-    # Try to create Ollama session first (primary choice)
-    session = create_ollama_session()
-    
-    # If Ollama fails, fall back to Gemini
-    if session is None:
-        logger.info("Falling back to Gemini as primary LLM")
-        session = create_gemini_session()
-        
-    return session
-
 async def entrypoint(ctx: JobContext) -> None:
     """Main agent entrypoint for English Teacher Agent.
     
-    Creates an English teacher agent with Tavus avatar for Tamil speakers learning English.
+    Creates an English teacher agent using Google Gemini API for Tamil speakers learning English.
     Includes automatic error recovery and keep-alive functionality.
     
     Args:
         ctx: JobContext containing room and session information
     """
     global _restart_count
-    logger.info(f"Initializing English Teacher Agent with Tavus Avatar... (Restart #{_restart_count})")
+    logger.info(f"Initializing English Teacher Agent with Gemini API... (Restart #{_restart_count})")
     
     session: Optional[AgentSession] = None
-    avatar: Optional[tavus.AvatarSession] = None
-    tavus_error = None  # Track Tavus-specific errors
     
     try:
-        # Create session with fallback mechanism
-        session = await create_session_with_fallback()
+        # Create Gemini session
+        session = create_gemini_session()
         
-        # If both fail, raise an error
         if session is None:
-            raise Exception("Failed to create session with either Ollama or Gemini")
-        
-        # Get Tavus credentials from environment
-        tavus_api_key = os.getenv("TAVUS_API_KEY")
-        replica_id = os.getenv("TAVUS_REPLICA_ID")
-        persona_id = os.getenv("TAVUS_PERSONA_ID")
-        
-        if not tavus_api_key:
-            logger.error("Missing required Tavus API key (TAVUS_API_KEY)")
-            return
-            
-        if not replica_id:
-            logger.error("Missing required Tavus Replica ID (TAVUS_REPLICA_ID)")
-            return
-            
-        if not persona_id:
-            logger.error("Missing required Tavus Persona ID (TAVUS_PERSONA_ID)")
-            return
-        
-        logger.info(f"Configuring Tavus avatar with Replica ID: {replica_id}, Persona ID: {persona_id}")
-        
-        # Setup avatar with error handling and fallback
-        avatar_initialized = False
-        
-        try:
-            # Create and start the Tavus avatar
-            avatar = tavus.AvatarSession(
-                replica_id=replica_id,
-                persona_id=persona_id,
-                avatar_participant_name="English-Teacher-Avatar"
-            )
-            
-            logger.info("[AVATAR] Initializing Tavus avatar...")
-            # Start the avatar session with timeout
-            await asyncio.wait_for(avatar.start(session, room=ctx.room), timeout=30.0)
-            logger.info("[SUCCESS] Tavus avatar ready")
-            avatar_initialized = True
-            
-        except APIStatusError as e:
-            tavus_error = e  # Store the error for later use
-            if e.status_code == 402:
-                logger.error("❌ Tavus API Error: Out of conversational credits")
-                logger.info("💡 Please check your Tavus account and add more credits to continue using the avatar")
-                logger.info(" Falling back to voice-only mode...")
-            else:
-                logger.error(f"Tavus API Error: {e}")
-                logger.info("Falling back to voice-only mode...")
-        except asyncio.TimeoutError:
-            logger.warning("Tavus avatar initialization timed out, falling back to voice-only mode")
-        except Exception as e:
-            tavus_error = e  # Store the error for later use
-            logger.error(f"Failed to initialize Tavus avatar: {e}")
-            logger.info("Falling back to voice-only mode...")
+            raise Exception("Failed to create Gemini session")
         
         # Start the agent session
         try:
@@ -242,14 +121,7 @@ async def entrypoint(ctx: JobContext) -> None:
                 room=ctx.room,
             )
             
-            if avatar_initialized:
-                logger.info("[ACTIVE] English Teacher Agent with Tavus Avatar is now active!")
-            else:
-                logger.info("[ACTIVE] English Teacher Agent (voice-only) is now active!")
-                # Log a clear message about the avatar issue
-                if tavus_error is not None and isinstance(tavus_error, APIStatusError) and tavus_error.status_code == 402:
-                    logger.info("📢 NOTE: The agent is running in voice-only mode due to Tavus credit limitations.")
-                    logger.info("   To enable the visual avatar, please add more conversational credits to your Tavus account.")
+            logger.info("[ACTIVE] English Teacher Agent with Gemini API is now active!")
 
             # Keep the session alive with periodic health checks
             await keep_session_alive(session, ctx.room)
@@ -262,7 +134,7 @@ async def entrypoint(ctx: JobContext) -> None:
         logger.error(f"Critical error in agent entrypoint: {e}")
         
         # Cleanup resources
-        await cleanup_resources(session, avatar)
+        await cleanup_resources(session)
         
         # Implement graceful degradation
         if not _shutdown_requested and _restart_count < _max_restarts:
@@ -274,29 +146,6 @@ async def entrypoint(ctx: JobContext) -> None:
         else:
             logger.error("Maximum restart attempts reached or shutdown requested")
             raise
-
-
-def configure_ssl_for_development() -> None:
-    """Configure SSL settings for development environment.
-    
-    Note: This disables SSL verification for development only.
-    Use proper SSL certificates in production.
-    """
-    # Create unverified SSL context for development
-    context = ssl.create_default_context()
-    context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
-    
-    # Set environment variables to bypass SSL issues
-    os.environ['PYTHONHTTPSVERIFY'] = '0'
-    os.environ['CURL_CA_BUNDLE'] = ''
-    os.environ['REQUESTS_CA_BUNDLE'] = ''
-    
-    # Suppress SSL warnings
-    warnings.filterwarnings('ignore', message='Unverified HTTPS request')
-    warnings.filterwarnings('ignore', category=UserWarning)
-    
-    logger.info("SSL verification disabled for development")
 
 
 async def keep_session_alive(session: AgentSession, room) -> None:
@@ -323,17 +172,13 @@ async def keep_session_alive(session: AgentSession, room) -> None:
     logger.info("Session keep-alive monitoring stopped")
 
 
-async def cleanup_resources(session: Optional[AgentSession] = None, avatar: Optional[tavus.AvatarSession] = None) -> None:
+async def cleanup_resources(session: Optional[AgentSession] = None) -> None:
     """Clean up resources gracefully."""
     logger.info("Cleaning up resources...")
-    
-    # Note: AvatarSession doesn't appear to have a close/aclose method based on dir() output
-    # We'll just clean up the session
     
     if session:
         try:
             with suppress(Exception):
-                # AgentSession has an aclose method
                 await session.aclose()
             logger.info("Agent session cleaned up")
         except Exception as e:
@@ -352,9 +197,6 @@ async def run_agent_with_auto_restart():
     
     while not _shutdown_requested and _restart_count < _max_restarts:
         try:
-            # Configure SSL for development
-            configure_ssl_for_development()
-            
             # Start the LiveKit agent
             logger.info("[START] Starting LiveKit agent...")
             cli.run_app(WorkerOptions(
@@ -425,9 +267,6 @@ def run_agent_for_render():
     
     health_thread = threading.Thread(target=start_health_server, daemon=True)
     health_thread.start()
-    
-    # Configure SSL for development
-    configure_ssl_for_development()
     
     # Start the LiveKit agent (this will block)
     logger.info("[START] Starting LiveKit agent for Render deployment...")
@@ -572,9 +411,6 @@ if __name__ == "__main__":
             if os.getenv("FAST_MODE") == "true":
                 logger.info("Fast mode enabled - text-only responses")
             
-            # Configure SSL for development
-            configure_ssl_for_development()
-            
             # Start the LiveKit agent normally for console mode
             cli.run_app(WorkerOptions(
                 entrypoint_fnc=entrypoint, 
@@ -597,9 +433,6 @@ if __name__ == "__main__":
             if os.getenv("FAST_MODE") == "true":
                 logger.info("Fast mode enabled - text-only responses")
             
-            # Configure SSL for development
-            configure_ssl_for_development()
-            
             # Start the LiveKit agent in room connection mode
             cli.run_app(WorkerOptions(
                 entrypoint_fnc=entrypoint, 
@@ -616,9 +449,6 @@ if __name__ == "__main__":
             
             if os.getenv("FAST_MODE") == "true":
                 logger.info("Fast mode enabled - text-only responses")
-            
-            # Configure SSL for development
-            configure_ssl_for_development()
             
             # Start the LiveKit agent in development mode
             cli.run_app(WorkerOptions(

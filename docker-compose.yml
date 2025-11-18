@@ -23,8 +23,8 @@ services:
     environment:
       - LIVEKIT_API_KEY=devkey
       - LIVEKIT_API_SECRET=devkey_secret_32chars_minimum_required_for_security
-      - LIVEKIT_URL=ws://110.172.151.107:7880
-      - NEXT_PUBLIC_LIVEKIT_URL=ws://110.172.151.107:7880
+      - LIVEKIT_URL=ws://localhost:7880
+      - NEXT_PUBLIC_LIVEKIT_URL=ws://localhost:7880
     depends_on:
       - livekit-server
     networks:
@@ -40,10 +40,7 @@ services:
       - LIVEKIT_URL=ws://livekit-server:7880
       - LIVEKIT_API_KEY=devkey
       - LIVEKIT_API_SECRET=devkey_secret_32chars_minimum_required_for_security
-      - GOOGLE_API_KEY=AIzaSyDaD1i09w3Ms61NoawbP1fE2esV6p2i-74
-      - TAVUS_API_KEY=e1514a10eaaf43e88b976eb38e3d01f1
-      - TAVUS_REPLICA_ID=rf4703150052
-      - TAVUS_PERSONA_ID=p405fa2e1e31
+      - GOOGLE_API_KEY=AIzaSyB8CieZrd_FmAZRJJjB7q1KT06gnx7FY8U
     depends_on:
       - livekit-server
     networks:
