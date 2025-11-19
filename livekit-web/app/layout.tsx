@@ -6,27 +6,27 @@ import { Toaster } from 'react-hot-toast';
 
 export const metadata: Metadata = {
   title: {
-    default: 'LiveKit Meet | Conference app build with LiveKit open source',
+    default: 'Sri Shakthi Meet | Video Conferencing Platform',
     template: '%s',
   },
   description:
-    'LiveKit is an open source WebRTC project that gives you everything needed to build scalable and real-time audio and/or video experiences in your applications.',
+    'Sri Shakthi Meet is a video conferencing platform built with LiveKit technology, providing scalable and real-time audio and video communication for education and collaboration.',
   twitter: {
-    creator: '@livekitted',
-    site: '@livekitted',
+    creator: '@srishakthi',
+    site: '@srishakthi',
     card: 'summary_large_image',
   },
   openGraph: {
-    url: 'https://meet.livekit.io',
+    url: 'https://meet.srishakthi.edu',
     images: [
       {
-        url: 'https://meet.livekit.io/images/livekit-meet-open-graph.png',
-        width: 2000,
-        height: 1000,
+        url: 'https://meet.srishakthi.edu/images/sri-shakthi-logo.png',
+        width: 830,
+        height: 143,
         type: 'image/png',
       },
     ],
-    siteName: 'LiveKit Meet',
+    siteName: 'Sri Shakthi Meet',
   },
   icons: {
     icon: {
